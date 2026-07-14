@@ -399,7 +399,7 @@ window.FarmGod.Translation = (function () {
       options: {
         title: 'FarmGod - Wall brechen',
         warning:
-          '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um die Wall zu zerstören<br>- Stelle sicher, dass die Farm-Filter Berichte mit teilweisen und vollständigen Verlusten (gelb/rot) anzeigen, bevor du das Skript benutzt',
+          '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um den Wall zu zerstören<br>- Stelle sicher, dass die Farm-Filter Berichte mit teilweisen und vollständigen Verlusten (gelb/rot) anzeigen, bevor du das Skript benutzt',
         group: 'Aus welcher Gruppe soll gefarmt werden:',
         distance: 'Maximale Entfernung in Feldern:',
         button: 'berechnen (B)',
@@ -643,6 +643,7 @@ window.FarmGod.Main = (function (Library, Translation) {
   const getData = function (group) {
     let data = {
       villages: {},
+      commands: {},
       farms: { templates: {}, farms: {} },
     };
 
@@ -751,6 +752,34 @@ window.FarmGod.Main = (function (Library, Translation) {
       }
 
       console.log('villages', data.villages);
+      return data;
+    };
+
+    let commandsProcessor = ($html) => {
+      $html
+        .find('#commands_table')
+        .find('.row_a, .row_ax, .row_b, .row_bx')
+        .map((i, el) => {
+          let $el = $(el);
+          let coord = $el
+            .find('.quickedit-label')
+            .first()
+            .text()
+            .toCoord();
+
+          if (coord) {
+            if (!data.commands.hasOwnProperty(coord))
+              data.commands[coord] = [];
+            return data.commands[coord].push(
+              Math.round(
+                lib.timestampFromString(
+                  $el.find('td').eq(2).text().trim()
+                ) / 1000
+              )
+            );
+          }
+        });
+
       return data;
     };
 
@@ -873,6 +902,13 @@ window.FarmGod.Main = (function (Library, Translation) {
         villagesProcessor
       ),
       lib.processAllPages(
+        TribalWars.buildURL('GET', 'overview_villages', {
+          mode: 'commands',
+          type: 'attack',
+        }),
+        commandsProcessor
+      ),
+      lib.processAllPages(
         TribalWars.buildURL('GET', 'am_farm'),
         farmProcessor
       ),
@@ -884,7 +920,16 @@ window.FarmGod.Main = (function (Library, Translation) {
   };
 
   const createPlanning = function (optionDistance, data) {
+    // Hidden safety gap: if a target already has a command (from an earlier
+    // run, e.g. after a misclick or an aborted run) landing within this many
+    // minutes of a newly calculated arrival, skip it and try the next
+    // nearest origin instead of stacking a second B attack on top of it.
+    // Not exposed in the UI on purpose.
+    const INC_GAP_MINUTES = 10;
+
     let plan = { counter: 0, farms: {} };
+    let serverTime = Math.round(lib.getCurrentServerTime() / 1000);
+    let maxTimeDiff = Math.round(INC_GAP_MINUTES * 60);
 
     // Checks whether a village has enough siege weapons (rams AND
     // catapults) for the template. These aren't in the normal units list
@@ -919,7 +964,9 @@ window.FarmGod.Main = (function (Library, Translation) {
 
     // data.farms.farms has already been filtered down to yellow/red/red_blue
     // targets only. For each one, find the nearest village that has enough
-    // troops + siege for template B and send it.
+    // troops + siege for template B, whose calculated arrival doesn't land
+    // within INC_GAP_MINUTES of an already in-flight command to that
+    // target, and send it.
     Object.keys(data.farms.farms).forEach((targetCoord) => {
       let orderedOrigins = Object.keys(data.villages)
         .map((originCoord) => {
@@ -943,6 +990,25 @@ window.FarmGod.Main = (function (Library, Translation) {
         if (!unitsLeft || !hasSiege(data.villages[originCoord], templateB))
           continue;
 
+        let arrival = Math.round(
+          serverTime +
+          distance * templateB.speed * 60 +
+          Math.round(plan.counter / 5)
+        );
+        let timeDiff = true;
+
+        if (data.commands.hasOwnProperty(targetCoord)) {
+          data.commands[targetCoord].forEach((timestamp) => {
+            if (Math.abs(timestamp - arrival) < maxTimeDiff) {
+              timeDiff = false;
+            }
+          });
+        } else {
+          data.commands[targetCoord] = [];
+        }
+
+        if (!timeDiff) continue;
+
         plan.counter++;
         if (!plan.farms.hasOwnProperty(originCoord)) {
           plan.farms[originCoord] = [];
@@ -964,6 +1030,7 @@ window.FarmGod.Main = (function (Library, Translation) {
 
         data.villages[originCoord].units = unitsLeft;
         subtractSiege(data.villages[originCoord], templateB);
+        data.commands[targetCoord].push(arrival);
 
         // One B run per yellow/red target per planning pass is enough to
         // clear the wall - move on to the next target.
