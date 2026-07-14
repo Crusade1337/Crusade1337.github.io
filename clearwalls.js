@@ -349,7 +349,6 @@ window.FarmGod.Translation = (function () {
           '<b>Waarschuwingen:</b><br>- Zorg dat sjabloon B genoeg rammen/katapulten bevat om de muur te breken<br>- Zorg dat de farm filters rapporten met gedeeltelijke en volledige verliezen (geel/rood) tonen voor je het script gebruikt',
         group: 'Uit welke groep moet er gefarmd worden:',
         distance: 'Maximaal aantal velden dat farms mogen lopen:',
-        time: 'Hoe veel tijd in minuten moet er tussen farms zitten:',
         button: 'Plan muur-farms (B)',
       },
       table: {
@@ -377,7 +376,6 @@ window.FarmGod.Translation = (function () {
           '<b>Figyelem:</b><br>- Bizonyosodj meg róla, hogy a "B" sablon elegendő faltörővel/katapulttal rendelkezik a fal lerombolásához<br>- Bizonyosodj meg róla, hogy a farm-filterek megjelenítik a részleges és teljes veszteséges (sárga/piros) jelentéseket, mielőtt használod a scriptet',
         group: 'Ebből a csoportból küldje:',
         distance: 'Maximális mező távolság:',
-        time: 'Mekkora időintervallumban küldje a támadásokat percben:',
         button: 'Fal-farmok tervezése (B)',
       },
       table: {
@@ -404,8 +402,7 @@ window.FarmGod.Translation = (function () {
           '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um die Mauer zu zerstören<br>- Stelle sicher, dass die Farm-Filter Berichte mit teilweisen und vollständigen Verlusten (gelb/rot) anzeigen, bevor du das Skript benutzt',
         group: 'Aus welcher Gruppe soll gefarmt werden:',
         distance: 'Maximale Entfernung in Feldern:',
-        time: 'Wie viele Minuten sollen zwischen den Farmangriffen liegen:',
-        button: 'Mauer-Farmen planen (B)',
+        button: 'berechnen (B)',
       },
       table: {
         noFarmsPlanned:
@@ -432,7 +429,6 @@ window.FarmGod.Translation = (function () {
           '<b>Warning:</b><br>- Make sure template B is loaded with enough rams/catapults to break the wall<br>- Make sure your farm filters show reports with partial and total losses (yellow/red) before using the script',
         group: 'Send farms from group:',
         distance: 'Maximum fields for farms:',
-        time: 'How much time in minutes should there be between farms:',
         button: 'Plan wall-clear farms (B)',
       },
       table: {
@@ -487,14 +483,12 @@ window.FarmGod.Main = (function (Library, Translation) {
               let optionDistance = parseFloat(
                 $('.optionDistance').val()
               );
-              let optionTime = parseFloat($('.optionTime').val());
 
               localStorage.setItem(
                 'farmGod_options',
                 JSON.stringify({
                   optionGroup: optionGroup,
                   optionDistance: optionDistance,
-                  optionTime: optionTime,
                 })
               );
 
@@ -506,7 +500,6 @@ window.FarmGod.Main = (function (Library, Translation) {
 
                 let plan = createPlanning(
                   optionDistance,
-                  optionTime,
                   data
                 );
                 $('.farmGodContent').remove();
@@ -572,7 +565,6 @@ window.FarmGod.Main = (function (Library, Translation) {
     let options = JSON.parse(localStorage.getItem('farmGod_options')) || {
       optionGroup: 0,
       optionDistance: 25,
-      optionTime: 10,
     };
 
     return $.when(buildGroupSelect(options.optionGroup)).then(
@@ -584,9 +576,6 @@ window.FarmGod.Main = (function (Library, Translation) {
                   <tr><td>${t.options.group}</td><td>${groupSelect}</td></tr>
                   <tr><td>${t.options.distance
           }</td><td><input type="text" size="5" class="optionDistance" value="${options.optionDistance
-          }"></td></tr>
-                  <tr><td>${t.options.time
-          }</td><td><input type="text" size="5" class="optionTime" value="${options.optionTime
           }"></td></tr>
                 </table></div><br><input type="button" class="btn optionButton" value="${t.options.button
           }"></div>`;
@@ -654,7 +643,6 @@ window.FarmGod.Main = (function (Library, Translation) {
   const getData = function (group) {
     let data = {
       villages: {},
-      commands: {},
       farms: { templates: {}, farms: {} },
     };
 
@@ -763,34 +751,6 @@ window.FarmGod.Main = (function (Library, Translation) {
       }
 
       console.log('villages', data.villages);
-      return data;
-    };
-
-    let commandsProcessor = ($html) => {
-      $html
-        .find('#commands_table')
-        .find('.row_a, .row_ax, .row_b, .row_bx')
-        .map((i, el) => {
-          let $el = $(el);
-          let coord = $el
-            .find('.quickedit-label')
-            .first()
-            .text()
-            .toCoord();
-
-          if (coord) {
-            if (!data.commands.hasOwnProperty(coord))
-              data.commands[coord] = [];
-            return data.commands[coord].push(
-              Math.round(
-                lib.timestampFromString(
-                  $el.find('td').eq(2).text().trim()
-                ) / 1000
-              )
-            );
-          }
-        });
-
       return data;
     };
 
@@ -913,13 +873,6 @@ window.FarmGod.Main = (function (Library, Translation) {
         villagesProcessor
       ),
       lib.processAllPages(
-        TribalWars.buildURL('GET', 'overview_villages', {
-          mode: 'commands',
-          type: 'attack',
-        }),
-        commandsProcessor
-      ),
-      lib.processAllPages(
         TribalWars.buildURL('GET', 'am_farm'),
         farmProcessor
       ),
@@ -930,10 +883,8 @@ window.FarmGod.Main = (function (Library, Translation) {
       });
   };
 
-  const createPlanning = function (optionDistance, optionTime, data) {
+  const createPlanning = function (optionDistance, data) {
     let plan = { counter: 0, farms: {} };
-    let serverTime = Math.round(lib.getCurrentServerTime() / 1000);
-    let maxTimeDiff = Math.round(optionTime * 60);
 
     // Checks whether a village has enough siege weapons (rams AND
     // catapults) for the template. These aren't in the normal units list
@@ -968,8 +919,7 @@ window.FarmGod.Main = (function (Library, Translation) {
 
     // data.farms.farms has already been filtered down to yellow/red/red_blue
     // targets only. For each one, find the nearest village that has enough
-    // troops + siege for template B and hasn't already got a command due to
-    // land there within optionTime minutes of this new one.
+    // troops + siege for template B and send it.
     Object.keys(data.farms.farms).forEach((targetCoord) => {
       let orderedOrigins = Object.keys(data.villages)
         .map((originCoord) => {
@@ -993,51 +943,31 @@ window.FarmGod.Main = (function (Library, Translation) {
         if (!unitsLeft || !hasSiege(data.villages[originCoord], templateB))
           continue;
 
-        let arrival = Math.round(
-          serverTime +
-          distance * templateB.speed * 60 +
-          Math.round(plan.counter / 5)
-        );
-        let timeDiff = true;
-
-        if (data.commands.hasOwnProperty(targetCoord)) {
-          data.commands[targetCoord].forEach((timestamp) => {
-            if (Math.abs(timestamp - arrival) < maxTimeDiff) {
-              timeDiff = false;
-            }
-          });
-        } else {
-          data.commands[targetCoord] = [];
+        plan.counter++;
+        if (!plan.farms.hasOwnProperty(originCoord)) {
+          plan.farms[originCoord] = [];
         }
 
-        if (timeDiff) {
-          plan.counter++;
-          if (!plan.farms.hasOwnProperty(originCoord)) {
-            plan.farms[originCoord] = [];
-          }
+        plan.farms[originCoord].push({
+          origin: {
+            coord: originCoord,
+            name: data.villages[originCoord].name,
+            id: data.villages[originCoord].id,
+          },
+          target: {
+            coord: targetCoord,
+            id: data.farms.farms[targetCoord].id,
+          },
+          fields: distance,
+          template: { name: 'b', id: templateB.id },
+        });
 
-          plan.farms[originCoord].push({
-            origin: {
-              coord: originCoord,
-              name: data.villages[originCoord].name,
-              id: data.villages[originCoord].id,
-            },
-            target: {
-              coord: targetCoord,
-              id: data.farms.farms[targetCoord].id,
-            },
-            fields: distance,
-            template: { name: 'b', id: templateB.id },
-          });
+        data.villages[originCoord].units = unitsLeft;
+        subtractSiege(data.villages[originCoord], templateB);
 
-          data.villages[originCoord].units = unitsLeft;
-          subtractSiege(data.villages[originCoord], templateB);
-          data.commands[targetCoord].push(arrival);
-
-          // One B run per yellow/red target per planning pass is enough to
-          // clear the wall - move on to the next target.
-          break;
-        }
+        // One B run per yellow/red target per planning pass is enough to
+        // clear the wall - move on to the next target.
+        break;
       }
     });
 
