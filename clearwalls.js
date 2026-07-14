@@ -397,9 +397,9 @@ window.FarmGod.Translation = (function () {
       missingFeatures:
         'Das Skript benötigt einen Premium-Account und den Farm-Assistenten!',
       options: {
-        title: 'FarmGod - Mauern brechen',
+        title: 'FarmGod - Wall brechen',
         warning:
-          '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um die Mauer zu zerstören<br>- Stelle sicher, dass die Farm-Filter Berichte mit teilweisen und vollständigen Verlusten (gelb/rot) anzeigen, bevor du das Skript benutzt',
+          '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um die Wall zu zerstören<br>- Stelle sicher, dass die Farm-Filter Berichte mit teilweisen und vollständigen Verlusten (gelb/rot) anzeigen, bevor du das Skript benutzt',
         group: 'Aus welcher Gruppe soll gefarmt werden:',
         distance: 'Maximale Entfernung in Feldern:',
         button: 'berechnen (B)',
