@@ -12,10 +12,10 @@
 // don't have a report yet and can't be yellow/red.
 // ---------------------------------------------------------------------------
 
-ScriptAPI.register('FarmGod', true, 'Warre', 'nl.tribalwars@coma.innogames.de');
+ScriptAPI.register('WallGod', true, 'Warre', 'nl.tribalwars@coma.innogames.de');
 
-window.FarmGod = {};
-window.FarmGod.Library = (function () {
+window.WallGod = {};
+window.WallGod.Library = (function () {
   /**** TribalWarsLibrary.js ****/
   if (typeof window.twLib === 'undefined') {
     window.twLib = {
@@ -158,14 +158,14 @@ window.FarmGod.Library = (function () {
         });
 
       localStorage.setItem(
-        'FarmGod_unitSpeeds',
+        'WallGod_unitSpeeds',
         JSON.stringify(unitSpeeds)
       );
     });
   };
 
   const getUnitSpeeds = function () {
-    return JSON.parse(localStorage.getItem('FarmGod_unitSpeeds')) || false;
+    return JSON.parse(localStorage.getItem('WallGod_unitSpeeds')) || false;
   };
 
   if (!getUnitSpeeds()) setUnitSpeeds();
@@ -338,13 +338,13 @@ window.FarmGod.Library = (function () {
   };
 })();
 
-window.FarmGod.Translation = (function () {
+window.WallGod.Translation = (function () {
   const msg = {
     nl_NL: {
       missingFeatures:
         'Script vereist een premium account en farm assistent!',
       options: {
-        title: 'FarmGod - Muren Breken',
+        title: 'WallGod - Muren Breken',
         warning:
           '<b>Waarschuwingen:</b><br>- Zorg dat sjabloon B genoeg rammen/katapulten bevat om de muur te breken<br>- Zorg dat de farm filters rapporten met gedeeltelijke en volledige verliezen (geel/rood) tonen voor je het script gebruikt',
         group: 'Uit welke groep moet er gefarmd worden:',
@@ -371,7 +371,7 @@ window.FarmGod.Translation = (function () {
       missingFeatures:
         'A scriptnek szüksége van Prémium fiókra és Farmkezelőre!',
       options: {
-        title: 'FarmGod - Falak lerombolása',
+        title: 'WallGod - Falak lerombolása',
         warning:
           '<b>Figyelem:</b><br>- Bizonyosodj meg róla, hogy a "B" sablon elegendő faltörővel/katapulttal rendelkezik a fal lerombolásához<br>- Bizonyosodj meg róla, hogy a farm-filterek megjelenítik a részleges és teljes veszteséges (sárga/piros) jelentéseket, mielőtt használod a scriptet',
         group: 'Ebből a csoportból küldje:',
@@ -397,12 +397,12 @@ window.FarmGod.Translation = (function () {
       missingFeatures:
         'Das Skript benötigt einen Premium-Account und den Farm-Assistenten!',
       options: {
-        title: 'FarmGod - Wall brechen',
+        title: 'WallGod - Wall brechen',
         warning:
           '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um den Wall zu zerstören<br>- Stelle sicher, dass die Farm-Filter Berichte mit teilweisen und vollständigen Verlusten (gelb/rot) anzeigen, bevor du das Skript benutzt',
         group: 'Aus welcher Gruppe soll gefarmt werden:',
         distance: 'Maximale Entfernung in Feldern:',
-        button: 'berechnen (B)',
+        button: 'Wall-Farmen berechnen (B)',
       },
       table: {
         noFarmsPlanned:
@@ -424,7 +424,7 @@ window.FarmGod.Translation = (function () {
       missingFeatures:
         'Script requires a premium account and loot assistent!',
       options: {
-        title: 'FarmGod - Clear Walls',
+        title: 'WallGod - Clear Walls',
         warning:
           '<b>Warning:</b><br>- Make sure template B is loaded with enough rams/catapults to break the wall<br>- Make sure your farm filters show reports with partial and total losses (yellow/red) before using the script',
         group: 'Send farms from group:',
@@ -461,7 +461,7 @@ window.FarmGod.Translation = (function () {
   };
 })();
 
-window.FarmGod.Main = (function (Library, Translation) {
+window.WallGod.Main = (function (Library, Translation) {
   const lib = Library;
   const t = Translation.get();
   let curVillage = null;
@@ -474,7 +474,7 @@ window.FarmGod.Main = (function (Library, Translation) {
     ) {
       if (game_data.screen == 'am_farm') {
         $.when(buildOptions()).then((html) => {
-          Dialog.show('FarmGod', html);
+          Dialog.show('WallGod', html);
 
           $('.optionButton')
             .off('click')
@@ -485,7 +485,7 @@ window.FarmGod.Main = (function (Library, Translation) {
               );
 
               localStorage.setItem(
-                'farmGod_options',
+                'wallGod_options',
                 JSON.stringify({
                   optionGroup: optionGroup,
                   optionDistance: optionDistance,
@@ -502,7 +502,7 @@ window.FarmGod.Main = (function (Library, Translation) {
                   optionDistance,
                   data
                 );
-                $('.farmGodContent').remove();
+                $('.wallGodContent').remove();
                 $('#am_widget_Farm')
                   .first()
                   .before(buildTable(plan.farms));
@@ -510,11 +510,11 @@ window.FarmGod.Main = (function (Library, Translation) {
                 bindEventHandlers();
                 UI.InitProgressBars();
                 UI.updateProgressBar(
-                  $('#FarmGodProgessbar'),
+                  $('#WallGodProgessbar'),
                   0,
                   plan.counter
                 );
-                $('#FarmGodProgessbar')
+                $('#WallGodProgessbar')
                   .data('current', 0)
                   .data('max', plan.counter);
               });
@@ -531,7 +531,7 @@ window.FarmGod.Main = (function (Library, Translation) {
   };
 
   const bindEventHandlers = function () {
-    $('.farmGod_icon')
+    $('.wallGod_icon')
       .off('click')
       .on('click', function () {
         if (
@@ -548,7 +548,7 @@ window.FarmGod.Main = (function (Library, Translation) {
       .off('keydown')
       .on('keydown', (event) => {
         if ((event.keyCode || event.which) == 13) {
-          $('.farmGod_icon').first().trigger('click');
+          $('.wallGod_icon').first().trigger('click');
         }
       });
 
@@ -562,14 +562,14 @@ window.FarmGod.Main = (function (Library, Translation) {
   };
 
   const buildOptions = function () {
-    let options = JSON.parse(localStorage.getItem('farmGod_options')) || {
+    let options = JSON.parse(localStorage.getItem('wallGod_options')) || {
       optionGroup: 0,
       optionDistance: 25,
     };
 
     return $.when(buildGroupSelect(options.optionGroup)).then(
       (groupSelect) => {
-        return `<style>#popup_box_FarmGod{text-align:center;width:550px;}</style>
+        return `<style>#popup_box_WallGod{text-align:center;width:550px;}</style>
                 <h3>${t.options.title}</h3><br><div class="optionsContent">
                 <div class="info_box" style="line-height: 15px;font-size:10px;text-align:left;"><p style="margin:0px 5px;">${t.options.warning}</p></div><br>
                 <div style="width:90%;margin:auto;background: url(\'graphic/index/main_bg.jpg\') 100% 0% #E3D5B3;border: 1px solid #7D510F;border-collapse: separate !important;border-spacing: 0px !important;"><table class="vis" style="width:100%;text-align:left;font-size:11px;">
@@ -605,8 +605,8 @@ window.FarmGod.Main = (function (Library, Translation) {
   };
 
   const buildTable = function (plan) {
-    let html = `<div class="vis farmGodContent"><h4>FarmGod - Clear Walls</h4><table class="vis" width="100%">
-                <tr><div id="FarmGodProgessbar" class="progress-bar live-progress-bar progress-bar-alive" style="width:98%;margin:5px auto;"><div style="background: rgb(146, 194, 0);"></div><span class="label" style="margin-top:0px;"></span></div></tr>
+    let html = `<div class="vis wallGodContent"><h4>WallGod - Clear Walls</h4><table class="vis" width="100%">
+                <tr><div id="WallGodProgessbar" class="progress-bar live-progress-bar progress-bar-alive" style="width:98%;margin:5px auto;"><div style="background: rgb(146, 194, 0);"></div><span class="label" style="margin-top:0px;"></span></div></tr>
                 <tr><th style="text-align:center;">${t.table.origin}</th><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.fields}</th><th style="text-align:center;">${t.table.farm}</th></tr>`;
 
     if (!$.isEmptyObject(plan)) {
@@ -626,7 +626,7 @@ window.FarmGod.Main = (function (Library, Translation) {
                     <td style="text-align:center;">${val.fields.toFixed(2)}</td>
                     <td style="text-align:center;"><a href="#" data-origin="${val.origin.id
             }" data-target="${val.target.id}" data-template="${val.template.id
-            }" class="farmGod_icon farm_icon farm_icon_${val.template.name
+            }" class="wallGod_icon farm_icon farm_icon_${val.template.name
             }" style="margin:auto;"></a></td>
                   </tr>`;
         });
@@ -761,11 +761,14 @@ window.FarmGod.Main = (function (Library, Translation) {
         .find('.row_a, .row_ax, .row_b, .row_bx')
         .map((i, el) => {
           let $el = $(el);
-          let coord = $el
-            .find('.quickedit-label')
-            .first()
-            .text()
-            .toCoord();
+          // NOTE: .quickedit-label only exists on YOUR OWN village (the
+          // origin) - barbarian targets don't have one, so grabbing the
+          // first match here previously picked up the origin's coord, not
+          // the target's, which silently defeated the gap check below.
+          // The destination is listed after the origin in the row, so the
+          // LAST coordinate-looking substring in the row text is the
+          // target - .toCoord() already grabs the last match.
+          let coord = $el.text().toCoord();
 
           if (coord) {
             if (!data.commands.hasOwnProperty(coord))
@@ -1052,7 +1055,7 @@ window.FarmGod.Main = (function (Library, Translation) {
     ) {
       farmBusy = true;
       Accountmanager.farm.last_click = n;
-      let $pb = $('#FarmGodProgessbar');
+      let $pb = $('#WallGodProgessbar');
 
       TribalWars.post(
         Accountmanager.send_units_link.replace(
@@ -1094,8 +1097,8 @@ window.FarmGod.Main = (function (Library, Translation) {
   return {
     init,
   };
-})(window.FarmGod.Library, window.FarmGod.Translation);
+})(window.WallGod.Library, window.WallGod.Translation);
 
 (() => {
-  window.FarmGod.Main.init();
+  window.WallGod.Main.init();
 })();
