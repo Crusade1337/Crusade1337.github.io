@@ -646,12 +646,6 @@ window.WallGod.Main = (function (Library, Translation) {
       commands: {},
       farms: { templates: {}, farms: {} },
     };
-    // villagesProcessor, commandsProcessor and farmProcessor all run
-    // concurrently (see Promise.all below), so commandsProcessor can't
-    // safely check data.villages while it's still being filled in. It just
-    // records the raw coordinates per row here instead; resolveCommands()
-    // sorts out origin vs. target afterwards, once all villages are known.
-    let rawCommandRows = [];
 
     let villagesProcessor = ($html) => {
       let skipUnits = ['ram', 'catapult', 'knight', 'snob', 'militia'];
@@ -767,44 +761,24 @@ window.WallGod.Main = (function (Library, Translation) {
         .find('.row_a, .row_ax, .row_b, .row_bx')
         .map((i, el) => {
           let $el = $(el);
-          // Just collect every coordinate-looking substring in the row plus
-          // the arrival timestamp. We deliberately do NOT decide here which
-          // one is the target - see resolveCommands() for why.
-          let coords = $el.text().match(/\d{1,3}\|\d{1,3}/g) || [];
+          let coord = $el
+            .find('.quickedit-label')
+            .first()
+            .text()
+            .toCoord();
 
-          if (coords.length) {
-            rawCommandRows.push({
-              coords: coords,
-              timestamp: Math.round(
+          if (coord) {
+            if (!data.commands.hasOwnProperty(coord))
+              data.commands[coord] = [];
+            return data.commands[coord].push(
+              Math.round(
                 lib.timestampFromString(
                   $el.find('td').eq(2).text().trim()
                 ) / 1000
-              ),
-            });
+              )
+            );
           }
         });
-
-      return data;
-    };
-
-    // Runs after Promise.all below, once data.villages is guaranteed to be
-    // fully populated. For each scraped command row, whichever coordinate
-    // ISN'T one of our own villages is the target - this works regardless
-    // of row order, so it's correct for both outgoing and returning
-    // commands, unlike an order-based ("last coordinate in the row") guess.
-    let resolveCommands = () => {
-      rawCommandRows.forEach(({ coords, timestamp }) => {
-        let target = coords
-          .slice()
-          .reverse()
-          .find((c) => !data.villages.hasOwnProperty(c));
-
-        if (target) {
-          if (!data.commands.hasOwnProperty(target))
-            data.commands[target] = [];
-          data.commands[target].push(timestamp);
-        }
-      });
 
       return data;
     };
@@ -939,7 +913,6 @@ window.WallGod.Main = (function (Library, Translation) {
         farmProcessor
       ),
     ])
-      .then(resolveCommands)
       .then(filterFarms)
       .then(() => {
         return data;
