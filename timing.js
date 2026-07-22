@@ -371,14 +371,16 @@ var timeBarWidth = (typeof timeBarWidth !== 'undefined') ? timeBarWidth : false;
                 settings.msGoal = 0;
                 settings.timeGoal = 0;
                 settings.remember = false;
-                settings.autoSend = false;
                 localStorage.setItem(game_data.world + 'snipesettings', JSON.stringify(settings));
             }
             this.settings = settings;
             this.remember = this.settings.remember;
             this.msGoal = this.settings.msGoal;
             this.timeGoal = this.settings.timeGoal;
-            this.autoSend = this.settings.autoSend || false;
+            /* autoSend is intentionally NOT loaded from storage - it always
+             * starts unchecked so a leftover goal from a previous session
+             * can never trigger an instant, unintended send. */
+            this.autoSend = false;
         },
         updateSettings: function () {
             if (this.remember) {
@@ -390,7 +392,7 @@ var timeBarWidth = (typeof timeBarWidth !== 'undefined') ? timeBarWidth : false;
                 this.settings.timeGoal = 0;
                 this.settings.remember = false;
             }
-            this.settings.autoSend = this.autoSend;
+            /* autoSend is intentionally never written to storage - see loadSettings. */
             localStorage.setItem(game_data.world + 'snipesettings', JSON.stringify(this.settings));
         },
         retrieveInput: function () {
