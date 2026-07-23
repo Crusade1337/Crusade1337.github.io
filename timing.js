@@ -273,8 +273,14 @@ var timeBarWidth = (typeof timeBarWidth !== 'undefined') ? timeBarWidth : false;
                 if (timeString.match(window.lang['57d28d1b211fddbb7a499ead5bf23079'].split(' ')[0])) {
                     date = new Date(year, (month - 1), day + 1, hour, min, sec, ms ?? 0);
                 } else if (timeString.match(/\d+\.\d+\.\d+|\d+\.\d+|\d+\/\d+\/\d+/)) {
+                    // FIX: previously this matched digits against the WHOLE
+                    // timeString (including the HH:MM:SS part), so the hour
+                    // could get misread as a 2-digit year (e.g. hour "07"
+                    // became year "2007"). Now we only pull digits out of the
+                    // matched date portion itself.
+                    const dateMatch = timeString.match(/\d+\.\d+\.\d+|\d+\.\d+|\d+\/\d+\/\d+/)[0];
                     [day, month, year] = timeString.includes('om') ? timeString.split('om')[0].match(/\d+/g)
-                        : timeString.match(/\d+/g);
+                        : dateMatch.match(/\d+/g);
                     if (!year) year = new Date().getFullYear().toString();
 
                     const yearPrefix = new Date(date).getFullYear().toString().slice(0, 2);
