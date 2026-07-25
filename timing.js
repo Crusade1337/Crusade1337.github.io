@@ -2,6 +2,12 @@ var timeColor = (typeof timeColor !== 'undefined') ? timeColor : "green";
 var waitingColor = (typeof waitingColor !== 'undefined') ? waitingColor : "#ff9933";
 var noDateColor = (typeof noDateColor !== 'undefined') ? noDateColor : "green";
 var timeBarWidth = (typeof timeBarWidth !== 'undefined') ? timeBarWidth : false;
+// Safety margin (ms) added on top of the computed send time before auto-send
+// is allowed to fire the click. servertime >= sendtime alone still let the
+// click go off ~1s early in practice (rounding / timer jitter in
+// Timing.getCurrentServerTime()), so we deliberately bias late instead.
+// 100-200ms late is fine, sending early never is.
+var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? autoSendSafetyMarginMs : 150;
 
 (async () => {
     if (typeof window.twLib === 'undefined') {
@@ -427,7 +433,11 @@ var timeBarWidth = (typeof timeBarWidth !== 'undefined') ? timeBarWidth : false;
             });
         },
         updateBar: function () {
-            var servertime = Math.round(Timing.getCurrentServerTime());
+            // FIX: was Math.round(), which can round a fractional server ms
+            // UP and make the script believe "now" is later than it truly
+            // is. Math.floor() guarantees we never overestimate the current
+            // time, which removes one source of premature auto-send firing.
+            var servertime = Math.floor(Timing.getCurrentServerTime());
 
             /* How far the current ms is to the next goal, with 999ms distance
              * 0%, and 0ms distance being 100%. */
@@ -451,9 +461,18 @@ var timeBarWidth = (typeof timeBarWidth !== 'undefined') ? timeBarWidth : false;
                     document.getElementById("bar").style.background = waitingColor;
                 }
 
-                /* Auto-send: fire the submit click the instant we reach the
-                 * computed send time, but only once per goal. */
-                if (this.autoSend && !this.sent && servertime >= sendtime) {
+                /* Auto-send: fire the submit click once we're PAST the
+                 * computed send time by autoSendSafetyMarginMs, but only
+                 * once per goal.
+                 * FIX: comparing directly against "sendtime" (servertime >=
+                 * sendtime) still let the click go off ~1s early in
+                 * practice - almost certainly timer/tick jitter in
+                 * Timing.getCurrentServerTime(), which isn't guaranteed to
+                 * advance in lockstep with real elapsed time between server
+                 * syncs. Requiring a deliberate margin past the target
+                 * means jitter can only ever push the click later, never
+                 * earlier than intended. */
+                if (this.autoSend && !this.sent && servertime >= sendtime + autoSendSafetyMarginMs) {
                     this.sent = true;
                     var btn = document.getElementById("troop_confirm_submit");
                     if (btn) btn.click();
