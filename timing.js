@@ -347,7 +347,7 @@ var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? a
             if (this.timeGoal !== 0) {
                 var sendTime = this.timeGoal - this.duration;
                 var sendDate = new Date(sendTime)
-                stuur.innerHTML = ("<td>Stuurtijd:</td><td>" + sendDate.toLocaleDateString(undefined, {
+                stuur.innerHTML = ("<td>Send at:</td><td>" + sendDate.toLocaleDateString(undefined, {
                     day: 'numeric',
                     month: 'numeric'
                 }) + "&nbsp;" + "<b>" + sendDate.toLocaleTimeString() + "</b>" + "&nbsp;&nbsp;&nbsp;(<span class='timer' id='timer2' data-endtime='" + sendTime / 1000 + "'></span>)</td>");
@@ -359,7 +359,7 @@ var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? a
                 });
 
             } else {
-                stuur.innerHTML = ("<td>Stuurtijd:</td><td></td>");
+                stuur.innerHTML = ("<td>Send at:</td><td></td>");
             }
             document.getElementById("command-data-form").getElementsByTagName("table")[0].getElementsByTagName("tbody")[0].appendChild(stuur);
             stuur.id = 'sendtime';
@@ -487,7 +487,7 @@ var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? a
             if (this.timeGoal !== 0 && !isNaN(this.timeGoal)) {
                 var sendTime = this.timeGoal - this.duration + serverOffset;
                 var sendDate = new Date(sendTime);
-                stuur.innerHTML = ("<td>Stuurtijd:</td><td>" + sendDate.toLocaleDateString(undefined, {
+                stuur.innerHTML = ("<td>Send at:</td><td>" + sendDate.toLocaleDateString(undefined, {
                     day: 'numeric',
                     month: 'numeric'
                 }) + "&nbsp;" + "<b>" + sendDate.toLocaleTimeString() + "</b>" + "&nbsp;&nbsp;&nbsp;(<span class='timer' id='timer2' data-endtime='" + sendTime / 1000 + "'></span>)</td>");
@@ -500,7 +500,7 @@ var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? a
 
                 handleTimers();
             } else if (this.timeGoal !== 0 && !isNaN(this.timeGoal)) {
-                stuur.innerHTML = ("<td>Stuurtijd:</td><td></td>");
+                stuur.innerHTML = ("<td>Send at:</td><td></td>");
                 document.title = "No Time Given";
             }
         },
