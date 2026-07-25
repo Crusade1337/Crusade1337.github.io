@@ -335,7 +335,7 @@ var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? a
             progressBar.innerHTML = ("<div id='progress_bar'><div id='time'></div><div id='bar'></div></div>");
             timeGoalInput.innerHTML = ("<div width='100%'>snipe time: <input type='datetime-local' max=\"9999-12-31T23:59:59\" id='timegoal' step='1'></div>");
             msGoalInput.innerHTML = ("<div width='100%'>snipe ms: <input type='number' id='msgoal' style='width: 100px;'/></div>");
-            rememberInput.innerHTML = ("<div width='100%'><label>remember: <input type='checkbox' id='remember'/></label> &nbsp;<label style='color:red'>auto-send: <input type='checkbox' id='autoSend'/></label><div id='watermark'>made by Ricardo/Bottenkraker.</div></div>");
+            rememberInput.innerHTML = ("<div width='100%'><label>remember: <input type='checkbox' id='remember'/></label> &nbsp;<label style='color:red'>auto-send: <input type='checkbox' id='autoSend'/></label></div>");
 
             this.oldElement.appendChild(progressBar);
             this.oldElement.appendChild(timeGoalInput);
