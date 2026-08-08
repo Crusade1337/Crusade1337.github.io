@@ -10,6 +10,7 @@
 // Template "A" is no longer used by the planner at all. New-barbarian
 // discovery has been removed since undiscovered/never-attacked villages
 // don't have a report yet and can't be yellow/red.
+//
 // ---------------------------------------------------------------------------
 
 ScriptAPI.register('WallGod', true, 'Warre', 'nl.tribalwars@coma.innogames.de');
@@ -359,6 +360,15 @@ window.WallGod.Translation = (function () {
         fields: 'Velden',
         farm: 'Farm',
         goTo: 'Ga naar',
+        reason: 'Reden',
+        skippedHeader: 'Gevonden doelen zonder geschikte oorsprong',
+        reasons: {
+          too_far: 'Geen dorp binnen bereik',
+          no_troops: 'Niet genoeg troepen',
+          no_siege: 'Niet genoeg rammen/katapulten',
+          time_conflict: 'Aankomst botst met lopend bevel',
+          unknown: 'Onbekend',
+        },
       },
       messages: {
         villageChanged: 'Succesvol van dorp veranderd!',
@@ -386,6 +396,15 @@ window.WallGod.Translation = (function () {
         fields: 'Távolság',
         farm: 'Farm',
         goTo: 'Go to',
+        reason: 'Ok',
+        skippedHeader: 'Talált célpontok elérhető induló falu nélkül',
+        reasons: {
+          too_far: 'Nincs falu hatótávolságon belül',
+          no_troops: 'Nincs elég csapat',
+          no_siege: 'Nincs elég faltörő/katapult',
+          time_conflict: 'Az érkezés ütközik egy folyamatban lévő paranccsal',
+          unknown: 'Ismeretlen',
+        },
       },
       messages: {
         villageChanged: 'Falu sikeresen megváltoztatva!',
@@ -412,6 +431,15 @@ window.WallGod.Translation = (function () {
         fields: 'Felder',
         farm: 'Farm',
         goTo: 'Wechseln zu',
+        reason: 'Grund',
+        skippedHeader: 'Gefundene Ziele ohne passenden Ursprung',
+        reasons: {
+          too_far: 'Kein Dorf in Reichweite',
+          no_troops: 'Nicht genug Truppen',
+          no_siege: 'Nicht genug Rammböcke/Katapulte',
+          time_conflict: 'Ankunft kollidiert mit laufendem Befehl',
+          unknown: 'Unbekannt',
+        },
       },
       messages: {
         villageChanged: 'Dorf erfolgreich gewechselt!',
@@ -439,6 +467,15 @@ window.WallGod.Translation = (function () {
         fields: 'fields',
         farm: 'Farm',
         goTo: 'Go to',
+        reason: 'Reason',
+        skippedHeader: 'Targets found without an available origin',
+        reasons: {
+          too_far: 'No village in range',
+          no_troops: 'Not enough troops',
+          no_siege: 'Not enough rams/catapults',
+          time_conflict: 'Arrival conflicts with an existing command',
+          unknown: 'Unknown',
+        },
       },
       messages: {
         villageChanged: 'Successfully changed village!',
@@ -502,10 +539,15 @@ window.WallGod.Main = (function (Library, Translation) {
                   optionDistance,
                   data
                 );
-                $('.wallGodContent').remove();
+                // FIX: remove the skipped-targets block too, not just the
+                // main plan table, otherwise re-running the planner stacks
+                // duplicate "skipped" tables underneath each other.
+                $('.wallGodContent, .wallGodSkipped').remove();
                 $('#am_widget_Farm')
                   .first()
-                  .before(buildTable(plan.farms));
+                  // FIX: pass the whole plan (farms + skipped), not just
+                  // plan.farms, so buildTable can render both tables.
+                  .before(buildTable(plan));
 
                 bindEventHandlers();
                 UI.InitProgressBars();
@@ -604,18 +646,21 @@ window.WallGod.Main = (function (Library, Translation) {
     });
   };
 
+  // FIX: now takes the full plan object ({farms, skipped, counter})
+  // instead of just plan.farms, so it can render the diagnostic
+  // "skipped" table beneath the normal plan.
   const buildTable = function (plan) {
     let html = `<div class="vis wallGodContent"><h4>WallGod - Clear Walls</h4><table class="vis" width="100%">
                 <tr><div id="WallGodProgessbar" class="progress-bar live-progress-bar progress-bar-alive" style="width:98%;margin:5px auto;"><div style="background: rgb(146, 194, 0);"></div><span class="label" style="margin-top:0px;"></span></div></tr>
                 <tr><th style="text-align:center;">${t.table.origin}</th><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.fields}</th><th style="text-align:center;">${t.table.farm}</th></tr>`;
 
-    if (!$.isEmptyObject(plan)) {
-      for (let prop in plan) {
+    if (!$.isEmptyObject(plan.farms)) {
+      for (let prop in plan.farms) {
         if (game_data.market == 'nl') {
-          html += `<tr><td colspan="4" style="background: #e7d098;"><input type="button" class="btn switchVillage" data-id="${plan[prop][0].origin.id}" value="${t.table.goTo} ${plan[prop][0].origin.name} (${plan[prop][0].origin.coord})" style="float:right;"></td></tr>`;
+          html += `<tr><td colspan="4" style="background: #e7d098;"><input type="button" class="btn switchVillage" data-id="${plan.farms[prop][0].origin.id}" value="${t.table.goTo} ${plan.farms[prop][0].origin.name} (${plan.farms[prop][0].origin.coord})" style="float:right;"></td></tr>`;
         }
 
-        plan[prop].forEach((val, i) => {
+        plan.farms[prop].forEach((val, i) => {
           html += `<tr class="farmRow row_${i % 2 == 0 ? 'a' : 'b'}">
                     <td style="text-align:center;"><a href="${game_data.link_base_pure
             }info_village&id=${val.origin.id}">${val.origin.name} (${val.origin.coord
@@ -636,6 +681,22 @@ window.WallGod.Main = (function (Library, Translation) {
     }
 
     html += `</table></div>`;
+
+    // FIX: render targets that had a yellow/red/red_blue report but
+    // couldn't be matched to any origin, along with why. Previously these
+    // just vanished with no trace, which is what made it look like the
+    // script "wasn't finding" all walled villages.
+    if (plan.skipped && plan.skipped.length > 0) {
+      html += `<div class="vis wallGodSkipped" style="margin-top:5px;"><h4>${t.table.skippedHeader} (${plan.skipped.length})</h4><table class="vis" width="100%">
+                <tr><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.reason}</th></tr>`;
+
+      plan.skipped.forEach((s) => {
+        html += `<tr><td style="text-align:center;"><a href="${game_data.link_base_pure}info_village&id=${s.id}">${s.target}</a></td><td style="text-align:center;">${t.table.reasons[s.reason] || t.table.reasons.unknown
+          }</td></tr>`;
+      });
+
+      html += `</table></div>`;
+    }
 
     return html;
   };
@@ -863,10 +924,14 @@ window.WallGod.Main = (function (Library, Translation) {
               .toCoord()
           ] = {
             id: $el.attr('id').split('_')[1].toNumber(),
+            // FIX: "red_blue" must be checked before "red"/"blue" - regex
+            // alternation matches the first alternative that fits, and
+            // "red" is itself a valid prefix match of "red_blue", so a
+            // combined report was previously always mislabeled as "red".
             color: $el
               .find('img[src*="graphic/dots/"]')
               .attr('src')
-              .match(/dots\/(green|yellow|red|blue|red_blue)/)[1],
+              .match(/dots\/(red_blue|green|yellow|red|blue)/)[1],
             max_loot: $el.find('img[src*="max_loot/1"]').length > 0,
           });
         });
@@ -927,7 +992,9 @@ window.WallGod.Main = (function (Library, Translation) {
     // Not exposed in the UI on purpose.
     const INC_GAP_MINUTES = 10;
 
-    let plan = { counter: 0, farms: {} };
+    // FIX: added "skipped" so unmatched targets are tracked with a reason
+    // instead of silently disappearing.
+    let plan = { counter: 0, farms: {}, skipped: [] };
     let serverTime = Math.round(lib.getCurrentServerTime() / 1000);
     let maxTimeDiff = Math.round(INC_GAP_MINUTES * 60);
 
@@ -966,7 +1033,9 @@ window.WallGod.Main = (function (Library, Translation) {
     // targets only. For each one, find the nearest village that has enough
     // troops + siege for template B, whose calculated arrival doesn't land
     // within INC_GAP_MINUTES of an already in-flight command to that
-    // target, and send it.
+    // target, and send it. If no origin qualifies, the target is recorded
+    // in plan.skipped with the reason the *nearest* origin failed, instead
+    // of just being dropped.
     Object.keys(data.farms.farms).forEach((targetCoord) => {
       let orderedOrigins = Object.keys(data.villages)
         .map((originCoord) => {
@@ -977,18 +1046,35 @@ window.WallGod.Main = (function (Library, Translation) {
         })
         .sort((a, b) => (a.dis > b.dis ? 1 : -1));
 
+      let matched = false;
+      let reason = null;
+
       for (let i = 0; i < orderedOrigins.length; i++) {
         let originCoord = orderedOrigins[i].coord;
         let distance = orderedOrigins[i].dis;
 
-        if (distance >= optionDistance) continue;
+        // FIX: origins are sorted nearest-first, so once one is out of
+        // range every remaining one is too - break instead of continuing
+        // to scan (and this also fixes the reason ending up as whatever
+        // the last, farthest origin happened to fail on).
+        if (distance >= optionDistance) {
+          if (!reason) reason = 'too_far';
+          break;
+        }
 
         let unitsLeft = lib.subtractArrays(
           data.villages[originCoord].units,
           templateB.units
         );
-        if (!unitsLeft || !hasSiege(data.villages[originCoord], templateB))
+        if (!unitsLeft) {
+          if (!reason) reason = 'no_troops';
           continue;
+        }
+
+        if (!hasSiege(data.villages[originCoord], templateB)) {
+          if (!reason) reason = 'no_siege';
+          continue;
+        }
 
         let arrival = Math.round(
           serverTime +
@@ -1007,7 +1093,10 @@ window.WallGod.Main = (function (Library, Translation) {
           data.commands[targetCoord] = [];
         }
 
-        if (!timeDiff) continue;
+        if (!timeDiff) {
+          if (!reason) reason = 'time_conflict';
+          continue;
+        }
 
         plan.counter++;
         if (!plan.farms.hasOwnProperty(originCoord)) {
@@ -1032,9 +1121,18 @@ window.WallGod.Main = (function (Library, Translation) {
         subtractSiege(data.villages[originCoord], templateB);
         data.commands[targetCoord].push(arrival);
 
+        matched = true;
         // One B run per yellow/red target per planning pass is enough to
         // clear the wall - move on to the next target.
         break;
+      }
+
+      if (!matched) {
+        plan.skipped.push({
+          target: targetCoord,
+          id: data.farms.farms[targetCoord].id,
+          reason: reason || 'no_troops',
+        });
       }
     });
 
