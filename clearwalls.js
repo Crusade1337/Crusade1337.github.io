@@ -11,6 +11,15 @@
 // discovery has been removed since undiscovered/never-attacked villages
 // don't have a report yet and can't be yellow/red.
 //
+// FIX (see comments below marked "FIX:"):
+// - Color regex now checks "red_blue" before "red"/"blue" so combined
+//   reports are no longer mislabeled.
+// - Targets that have a yellow/red report but couldn't be matched to any
+//   origin (too far / not enough troops / not enough siege / arrival
+//   collides with an existing command) are no longer silently dropped -
+//   they're now listed in a second table with the reason, so you can see
+//   why a walled village isn't showing up in the plan instead of it just
+//   disappearing.
 // ---------------------------------------------------------------------------
 
 ScriptAPI.register('WallGod', true, 'Warre', 'nl.tribalwars@coma.innogames.de');
@@ -182,20 +191,25 @@ window.WallGod.Library = (function () {
       .closest('td')
       .find('select')
       .first();
+    // FIX: this used to read the page count from `$('#plunder_list_nav')`,
+    // which queries the live, currently-open browser tab rather than the
+    // page we just fetched via ajax. The script never reloads the visible
+    // tab while running, so that live nav widget stays frozen at whatever
+    // it showed before the run started - if it was stale or reflected a
+    // different filtered count, pagination stopped early and silently
+    // dropped every yellow/red village sitting on later pages. Reading it
+    // from $html (the page actually just fetched) fixes that.
+    let $navItems = $html
+      .find('#plunder_list_nav')
+      .first()
+      .find('a.paged-nav-item, strong.paged-nav-item');
     let navLength =
       $html.find('#am_widget_Farm').length > 0
-        ? parseInt(
-          $('#plunder_list_nav')
-            .first()
-            .find('a.paged-nav-item, strong.paged-nav-item')
-          [
-            $('#plunder_list_nav')
-              .first()
-              .find(
-                'a.paged-nav-item, strong.paged-nav-item'
-              ).length - 1
-          ].textContent.replace(/\D/g, '')
-        ) - 1
+        ? $navItems.length > 0
+          ? parseInt(
+            $navItems[$navItems.length - 1].textContent.replace(/\D/g, '')
+          ) - 1
+          : 0
         : navSelect.length > 0
           ? navSelect.find('option').length - 1
           : $html.find('.paged-nav-item').not('[href*="page=-1"]').length;
