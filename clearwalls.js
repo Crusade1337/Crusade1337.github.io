@@ -1,25 +1,3 @@
-// Hungarian translation provided by =Krumpli=
-//
-// --- MODIFIED FORK: "Clear Walls" mode -----------------------------------
-// This version no longer plans normal A/B farm runs across all targets.
-// Instead it ONLY looks at targets that came back with a yellow (partial
-// loss) or red/red_blue (full loss) report - i.e. villages that likely
-// still have a wall standing - and sends your "B" template (which you
-// pre-load with the ram/kata split you want in the Farm Manager) to the
-// nearest available village that has enough troops + siege for it.
-// Template "A" is no longer used by the planner at all. New-barbarian
-// discovery has been removed since undiscovered/never-attacked villages
-// don't have a report yet and can't be yellow/red.
-//
-// FIX (see comments below marked "FIX:"):
-// - Color regex now checks "red_blue" before "red"/"blue" so combined
-//   reports are no longer mislabeled.
-// - Targets that have a yellow/red report but couldn't be matched to any
-//   origin (too far / not enough troops / not enough siege / arrival
-//   collides with an existing command) are no longer silently dropped -
-//   they're now listed in a second table with the reason, so you can see
-//   why a walled village isn't showing up in the plan instead of it just
-//   disappearing.
 // ---------------------------------------------------------------------------
 
 ScriptAPI.register('WallGod', true, 'Warre', 'nl.tribalwars@coma.innogames.de');
@@ -197,7 +175,7 @@ window.WallGod.Library = (function () {
     // tab while running, so that live nav widget stays frozen at whatever
     // it showed before the run started - if it was stale or reflected a
     // different filtered count, pagination stopped early and silently
-    // dropped every yellow/red village sitting on later pages. Reading it
+    // dropped every walled village sitting on later pages. Reading it
     // from $html (the page actually just fetched) fixes that.
     let $navItems = $html
       .find('#plunder_list_nav')
@@ -252,6 +230,33 @@ window.WallGod.Library = (function () {
       } else {
         return processorFn($html);
       }
+    };
+
+    return processPage(url, page, wrapFn);
+  };
+
+  // NEW: same page-walking logic as processAllPages, but stops once
+  // `maxPages` pages have been fetched instead of always exhausting the
+  // full farm list. maxPages <= 0 means "no cap" (behaves like
+  // processAllPages). Used only for the farm-list scan, since that list
+  // can be very long; the player's own village/command overviews still
+  // use the unlimited processAllPages above.
+  const processAllPagesLimited = function (url, processorFn, maxPages) {
+    let page = url.match('am_farm') || url.match('scavenge_mass') ? 0 : -1;
+    let pagesFetched = 0;
+
+    let wrapFn = function (page, $html) {
+      pagesFetched++;
+      processorFn($html);
+
+      let dnp = determineNextPage(page, $html);
+      let capped = maxPages > 0 && pagesFetched >= maxPages;
+
+      if (dnp !== false && !capped) {
+        return processPage(url, dnp, wrapFn);
+      }
+
+      return $.Deferred().resolve().promise();
     };
 
     return processPage(url, page, wrapFn);
@@ -346,6 +351,7 @@ window.WallGod.Library = (function () {
     getUnitSpeeds,
     processPage,
     processAllPages,
+    processAllPagesLimited,
     getDistance,
     subtractArrays,
     getCurrentServerTime,
@@ -361,16 +367,18 @@ window.WallGod.Translation = (function () {
       options: {
         title: 'WallGod - Muren Breken',
         warning:
-          '<b>Waarschuwingen:</b><br>- Zorg dat sjabloon B genoeg rammen/katapulten bevat om de muur te breken<br>- Zorg dat de farm filters rapporten met gedeeltelijke en volledige verliezen (geel/rood) tonen voor je het script gebruikt',
+          '<b>Waarschuwingen:</b><br>- Zorg dat sjabloon B genoeg rammen/katapulten bevat om de muur te breken<br>- Doelen worden nu geselecteerd op basis van het daadwerkelijk gerapporteerde muurniveau (overgenomen van Clear Barbarian Walls), niet enkel de rapportkleur - zorg dat je farm-filters de gewenste rapporten nog steeds tonen<br>- Een lager aantal "Maximaal aantal pagina\'s" is sneller, maar kan verder weg gelegen ommuurde dorpen missen',
         group: 'Uit welke groep moet er gefarmd worden:',
         distance: 'Maximaal aantal velden dat farms mogen lopen:',
+        maxPages: "Maximaal aantal Farm Assistent pagina's om op te halen (dichtstbijzijnde eerst):",
         button: 'Plan muur-farms (B)',
       },
       table: {
         noFarmsPlanned:
-          'Er zijn geen dorpen met een gedeeltelijk of volledig verlies-rapport gevonden om te plannen.',
+          'Er zijn geen dorpen met een muur gevonden om te plannen.',
         origin: 'Oorsprong',
         target: 'Doel',
+        wall: 'Muur',
         fields: 'Velden',
         farm: 'Farm',
         goTo: 'Ga naar',
@@ -397,16 +405,18 @@ window.WallGod.Translation = (function () {
       options: {
         title: 'WallGod - Falak lerombolása',
         warning:
-          '<b>Figyelem:</b><br>- Bizonyosodj meg róla, hogy a "B" sablon elegendő faltörővel/katapulttal rendelkezik a fal lerombolásához<br>- Bizonyosodj meg róla, hogy a farm-filterek megjelenítik a részleges és teljes veszteséges (sárga/piros) jelentéseket, mielőtt használod a scriptet',
+          '<b>Figyelem:</b><br>- Bizonyosodj meg róla, hogy a "B" sablon elegendő faltörővel/katapulttal rendelkezik a fal lerombolásához<br>- A célpontokat mostantól a ténylegesen jelentett fal-szint alapján választja ki a script (a Clear Barbarian Walls scriptből átvéve), nem csak a jelentés színe alapján - ellenőrizd, hogy a farm-filtereid még mindig megjelenítik a kívánt jelentéseket<br>- Az "Oldalak maximális száma" csökkentése gyorsabb, de lemaradhatnak róla a távolabbi, még fallal rendelkező falvak',
         group: 'Ebből a csoportból küldje:',
         distance: 'Maximális mező távolság:',
+        maxPages: 'Lekérdezendő Farm Segéd oldalak maximális száma (legközelebbi elsőként):',
         button: 'Fal-farmok tervezése (B)',
       },
       table: {
         noFarmsPlanned:
-          'Nem található részleges vagy teljes veszteséges jelentésű falu a tervezéshez.',
+          'Nem található fallal rendelkező falu a tervezéshez.',
         origin: 'Origin',
         target: 'Célpont',
+        wall: 'Fal',
         fields: 'Távolság',
         farm: 'Farm',
         goTo: 'Go to',
@@ -432,16 +442,18 @@ window.WallGod.Translation = (function () {
       options: {
         title: 'WallGod - Wall brechen',
         warning:
-          '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um den Wall zu zerstören<br>- Stelle sicher, dass die Farm-Filter Berichte mit teilweisen und vollständigen Verlusten (gelb/rot) anzeigen, bevor du das Skript benutzt',
+          '<b>Warnung:</b><br>- Stelle sicher, dass Vorlage B genügend Rammböcke/Katapulte enthält, um den Wall zu zerstören<br>- Ziele werden jetzt anhand des tatsächlich gemeldeten Wall-Levels ausgewählt (übernommen von Clear Barbarian Walls), nicht mehr nur anhand der Berichtsfarbe - stelle sicher, dass deine Farm-Filter die gewünschten Berichte weiterhin anzeigen<br>- Eine niedrigere "Maximale Seitenanzahl" ist schneller, kann aber weiter entfernte, noch ummauerte Dörfer übersehen',
         group: 'Aus welcher Gruppe soll gefarmt werden:',
         distance: 'Maximale Entfernung in Feldern:',
+        maxPages: 'Maximale Anzahl an Farm-Assistent-Seiten (nächste zuerst):',
         button: 'Wall-Farmen berechnen (B)',
       },
       table: {
         noFarmsPlanned:
-          'Es wurden keine Dörfer mit einem Teil- oder Totalverlust-Bericht gefunden.',
+          'Es wurden keine Dörfer mit einem Wall gefunden.',
         origin: 'Herkunft',
         target: 'Ziel',
+        wall: 'Wall',
         fields: 'Felder',
         farm: 'Farm',
         goTo: 'Wechseln zu',
@@ -468,16 +480,18 @@ window.WallGod.Translation = (function () {
       options: {
         title: 'WallGod - Clear Walls',
         warning:
-          '<b>Warning:</b><br>- Make sure template B is loaded with enough rams/catapults to break the wall<br>- Make sure your farm filters show reports with partial and total losses (yellow/red) before using the script',
+          '<b>Warning:</b><br>- Make sure template B is loaded with enough rams/catapults to break the wall<br>- Targets are now selected by their actual reported wall level (borrowed from Clear Barbarian Walls), not just the report color - make sure your farm filters still show the reports you want scanned<br>- Lowering "Maximum FA pages" speeds up scanning but may miss walled villages further down the (distance-sorted) list',
         group: 'Send farms from group:',
         distance: 'Maximum fields for farms:',
+        maxPages: 'Maximum FA pages to fetch (nearest first):',
         button: 'Plan wall-clear farms (B)',
       },
       table: {
         noFarmsPlanned:
-          'No villages with a yellow or red report were found to plan.',
+          'No villages with a wall were found to plan.',
         origin: 'Origin',
         target: 'Target',
+        wall: 'Wall',
         fields: 'fields',
         farm: 'Farm',
         goTo: 'Go to',
@@ -534,19 +548,22 @@ window.WallGod.Main = (function (Library, Translation) {
               let optionDistance = parseFloat(
                 $('.optionDistance').val()
               );
+              let optionMaxPages =
+                parseInt($('.optionMaxPages').val()) || 0;
 
               localStorage.setItem(
                 'wallGod_options',
                 JSON.stringify({
                   optionGroup: optionGroup,
                   optionDistance: optionDistance,
+                  optionMaxPages: optionMaxPages,
                 })
               );
 
               $('.optionsContent').html(
                 UI.Throbber[0].outerHTML + '<br><br>'
               );
-              getData(optionGroup).then((data) => {
+              getData(optionGroup, optionMaxPages).then((data) => {
                 Dialog.close();
 
                 let plan = createPlanning(
@@ -621,6 +638,7 @@ window.WallGod.Main = (function (Library, Translation) {
     let options = JSON.parse(localStorage.getItem('wallGod_options')) || {
       optionGroup: 0,
       optionDistance: 25,
+      optionMaxPages: 20,
     };
 
     return $.when(buildGroupSelect(options.optionGroup)).then(
@@ -632,6 +650,9 @@ window.WallGod.Main = (function (Library, Translation) {
                   <tr><td>${t.options.group}</td><td>${groupSelect}</td></tr>
                   <tr><td>${t.options.distance
           }</td><td><input type="text" size="5" class="optionDistance" value="${options.optionDistance
+          }"></td></tr>
+                  <tr><td>${t.options.maxPages
+          }</td><td><input type="text" size="5" class="optionMaxPages" value="${options.optionMaxPages || 20
           }"></td></tr>
                 </table></div><br><input type="button" class="btn optionButton" value="${t.options.button
           }"></div>`;
@@ -662,16 +683,17 @@ window.WallGod.Main = (function (Library, Translation) {
 
   // FIX: now takes the full plan object ({farms, skipped, counter})
   // instead of just plan.farms, so it can render the diagnostic
-  // "skipped" table beneath the normal plan.
+  // "skipped" table beneath the normal plan. Both tables now also show
+  // the reported wall level (new).
   const buildTable = function (plan) {
     let html = `<div class="vis wallGodContent"><h4>WallGod - Clear Walls</h4><table class="vis" width="100%">
                 <tr><div id="WallGodProgessbar" class="progress-bar live-progress-bar progress-bar-alive" style="width:98%;margin:5px auto;"><div style="background: rgb(146, 194, 0);"></div><span class="label" style="margin-top:0px;"></span></div></tr>
-                <tr><th style="text-align:center;">${t.table.origin}</th><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.fields}</th><th style="text-align:center;">${t.table.farm}</th></tr>`;
+                <tr><th style="text-align:center;">${t.table.origin}</th><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.wall}</th><th style="text-align:center;">${t.table.fields}</th><th style="text-align:center;">${t.table.farm}</th></tr>`;
 
     if (!$.isEmptyObject(plan.farms)) {
       for (let prop in plan.farms) {
         if (game_data.market == 'nl') {
-          html += `<tr><td colspan="4" style="background: #e7d098;"><input type="button" class="btn switchVillage" data-id="${plan.farms[prop][0].origin.id}" value="${t.table.goTo} ${plan.farms[prop][0].origin.name} (${plan.farms[prop][0].origin.coord})" style="float:right;"></td></tr>`;
+          html += `<tr><td colspan="5" style="background: #e7d098;"><input type="button" class="btn switchVillage" data-id="${plan.farms[prop][0].origin.id}" value="${t.table.goTo} ${plan.farms[prop][0].origin.name} (${plan.farms[prop][0].origin.coord})" style="float:right;"></td></tr>`;
         }
 
         plan.farms[prop].forEach((val, i) => {
@@ -682,6 +704,7 @@ window.WallGod.Main = (function (Library, Translation) {
                     <td style="text-align:center;"><a href="${game_data.link_base_pure
             }info_village&id=${val.target.id}">${val.target.coord
             }</a></td>
+                    <td style="text-align:center;">${val.wall}</td>
                     <td style="text-align:center;">${val.fields.toFixed(2)}</td>
                     <td style="text-align:center;"><a href="#" data-origin="${val.origin.id
             }" data-target="${val.target.id}" data-template="${val.template.id
@@ -691,21 +714,21 @@ window.WallGod.Main = (function (Library, Translation) {
         });
       }
     } else {
-      html += `<tr><td colspan="4" style="text-align: center;">${t.table.noFarmsPlanned}</td></tr>`;
+      html += `<tr><td colspan="5" style="text-align: center;">${t.table.noFarmsPlanned}</td></tr>`;
     }
 
     html += `</table></div>`;
 
-    // FIX: render targets that had a yellow/red/red_blue report but
-    // couldn't be matched to any origin, along with why. Previously these
-    // just vanished with no trace, which is what made it look like the
-    // script "wasn't finding" all walled villages.
+    // FIX: render targets that had a wall standing but couldn't be matched
+    // to any origin, along with why. Previously these just vanished with
+    // no trace, which is what made it look like the script "wasn't
+    // finding" all walled villages.
     if (plan.skipped && plan.skipped.length > 0) {
       html += `<div class="vis wallGodSkipped" style="margin-top:5px;"><h4>${t.table.skippedHeader} (${plan.skipped.length})</h4><table class="vis" width="100%">
-                <tr><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.reason}</th></tr>`;
+                <tr><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.wall}</th><th style="text-align:center;">${t.table.reason}</th></tr>`;
 
       plan.skipped.forEach((s) => {
-        html += `<tr><td style="text-align:center;"><a href="${game_data.link_base_pure}info_village&id=${s.id}">${s.target}</a></td><td style="text-align:center;">${t.table.reasons[s.reason] || t.table.reasons.unknown
+        html += `<tr><td style="text-align:center;"><a href="${game_data.link_base_pure}info_village&id=${s.id}">${s.target}</a></td><td style="text-align:center;">${s.wall}</td><td style="text-align:center;">${t.table.reasons[s.reason] || t.table.reasons.unknown
           }</td></tr>`;
       });
 
@@ -715,7 +738,7 @@ window.WallGod.Main = (function (Library, Translation) {
     return html;
   };
 
-  const getData = function (group) {
+  const getData = function (group, maxFaPages) {
     let data = {
       villages: {},
       commands: {},
@@ -947,25 +970,39 @@ window.WallGod.Main = (function (Library, Translation) {
               .attr('src')
               .match(/dots\/(red_blue|green|yellow|red|blue)/)[1],
             max_loot: $el.find('img[src*="max_loot/1"]').length > 0,
+            // NEW: the reported wall level, straight from the "extended"
+            // Farm Assistant view (see getData - the request URL passes
+            // extended=1). This is the same column Clear Barbarian Walls
+            // reads to size its attacks; here it's only used to decide
+            // whether a target still needs clearing, not to size troops.
+            // "?" means the wall has never been scouted.
+            wall: $el.find('td').eq(6).text().trim(),
           });
         });
 
       return data;
     };
 
-    // Only keep targets whose last report is a partial loss (yellow) or a
-    // full loss (red / red_blue) - these are the villages that still have
-    // a wall standing and need a "B" (ram/kata) run to clear it. Green,
-    // blue and colorless (never-attacked / new barb) entries are dropped.
+    // Borrowed from Clear Barbarian Walls: keep a target only if it still
+    // looks like it has a wall standing, judged from the actual reported
+    // wall level instead of just the report colour.
+    //   - known wall level > 0            -> keep
+    //   - unknown wall ("?") + not green  -> keep (never scouted, or the
+    //                                        last attack didn't clear it)
+    //   - unknown wall ("?") + green      -> drop (clean win with nothing
+    //                                        further reported - nothing
+    //                                        indicates a wall is left)
+    //   - known wall level == 0           -> drop (wall's already down)
     let filterFarms = () => {
       data.farms.farms = Object.fromEntries(
         Object.entries(data.farms.farms).filter(([key, val]) => {
-          return (
-            val.hasOwnProperty('color') &&
-            (val.color == 'yellow' ||
-              val.color == 'red' ||
-              val.color == 'red_blue')
-          );
+          if (!val.hasOwnProperty('wall')) return false;
+
+          let wallNum = parseInt(val.wall);
+          let wallKnown = !isNaN(wallNum);
+
+          if (wallKnown) return wallNum > 0;
+          return val.color != 'green';
         })
       );
 
@@ -987,9 +1024,19 @@ window.WallGod.Main = (function (Library, Translation) {
         }),
         commandsProcessor
       ),
-      lib.processAllPages(
-        TribalWars.buildURL('GET', 'am_farm'),
-        farmProcessor
+      // NEW: extended=1 pulls in the wall-level column (same flag Clear
+      // Barbarian Walls uses); order=distance&dir=asc sorts nearest-first
+      // so a page cap drops the farthest targets, not random ones;
+      // processAllPagesLimited stops after maxFaPages pages (0/blank =
+      // unlimited, same as the old behaviour).
+      lib.processAllPagesLimited(
+        TribalWars.buildURL('GET', 'am_farm', {
+          extended: 1,
+          order: 'distance',
+          dir: 'asc',
+        }),
+        farmProcessor,
+        maxFaPages
       ),
     ])
       .then(filterFarms)
@@ -1043,13 +1090,13 @@ window.WallGod.Main = (function (Library, Translation) {
 
     let templateB = data.farms.templates['b'];
 
-    // data.farms.farms has already been filtered down to yellow/red/red_blue
-    // targets only. For each one, find the nearest village that has enough
-    // troops + siege for template B, whose calculated arrival doesn't land
-    // within INC_GAP_MINUTES of an already in-flight command to that
-    // target, and send it. If no origin qualifies, the target is recorded
-    // in plan.skipped with the reason the *nearest* origin failed, instead
-    // of just being dropped.
+    // data.farms.farms has already been filtered down to targets that still
+    // look walled (see filterFarms). For each one, find the nearest village
+    // that has enough troops + siege for template B, whose calculated
+    // arrival doesn't land within INC_GAP_MINUTES of an already in-flight
+    // command to that target, and send it. If no origin qualifies, the
+    // target is recorded in plan.skipped with the reason the *nearest*
+    // origin failed, instead of just being dropped.
     Object.keys(data.farms.farms).forEach((targetCoord) => {
       let orderedOrigins = Object.keys(data.villages)
         .map((originCoord) => {
@@ -1127,6 +1174,7 @@ window.WallGod.Main = (function (Library, Translation) {
             coord: targetCoord,
             id: data.farms.farms[targetCoord].id,
           },
+          wall: data.farms.farms[targetCoord].wall,
           fields: distance,
           template: { name: 'b', id: templateB.id },
         });
@@ -1136,7 +1184,7 @@ window.WallGod.Main = (function (Library, Translation) {
         data.commands[targetCoord].push(arrival);
 
         matched = true;
-        // One B run per yellow/red target per planning pass is enough to
+        // One B run per walled target per planning pass is enough to
         // clear the wall - move on to the next target.
         break;
       }
@@ -1145,6 +1193,7 @@ window.WallGod.Main = (function (Library, Translation) {
         plan.skipped.push({
           target: targetCoord,
           id: data.farms.farms[targetCoord].id,
+          wall: data.farms.farms[targetCoord].wall,
           reason: reason || 'no_troops',
         });
       }
