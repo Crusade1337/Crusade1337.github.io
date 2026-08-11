@@ -1,7 +1,5 @@
 // ---------------------------------------------------------------------------
 
-ScriptAPI.register('WallGod', true, 'Warre', 'nl.tribalwars@coma.innogames.de');
-
 window.WallGod = {};
 window.WallGod.Library = (function () {
   /**** TribalWarsLibrary.js ****/
