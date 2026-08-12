@@ -233,33 +233,6 @@ window.WallGod.Library = (function () {
     return processPage(url, page, wrapFn);
   };
 
-  // NEW: same page-walking logic as processAllPages, but stops once
-  // `maxPages` pages have been fetched instead of always exhausting the
-  // full farm list. maxPages <= 0 means "no cap" (behaves like
-  // processAllPages). Used only for the farm-list scan, since that list
-  // can be very long; the player's own village/command overviews still
-  // use the unlimited processAllPages above.
-  const processAllPagesLimited = function (url, processorFn, maxPages) {
-    let page = url.match('am_farm') || url.match('scavenge_mass') ? 0 : -1;
-    let pagesFetched = 0;
-
-    let wrapFn = function (page, $html) {
-      pagesFetched++;
-      processorFn($html);
-
-      let dnp = determineNextPage(page, $html);
-      let capped = maxPages > 0 && pagesFetched >= maxPages;
-
-      if (dnp !== false && !capped) {
-        return processPage(url, dnp, wrapFn);
-      }
-
-      return $.Deferred().resolve().promise();
-    };
-
-    return processPage(url, page, wrapFn);
-  };
-
   const getDistance = function (origin, target) {
     let a = origin.toCoord(true).x - target.toCoord(true).x;
     let b = origin.toCoord(true).y - target.toCoord(true).y;
@@ -349,7 +322,6 @@ window.WallGod.Library = (function () {
     getUnitSpeeds,
     processPage,
     processAllPages,
-    processAllPagesLimited,
     getDistance,
     subtractArrays,
     getCurrentServerTime,
@@ -558,37 +530,65 @@ window.WallGod.Main = (function (Library, Translation) {
                 })
               );
 
+              // NEW: real progress bar for the FA page scan, same idea as
+              // Clear Barbarian Walls' fetch progress bar. Total isn't
+              // known until the first request (fetchFarmListPageUrls)
+              // resolves, so it starts at 0/1 and gets corrected once the
+              // real total is known.
               $('.optionsContent').html(
-                UI.Throbber[0].outerHTML + '<br><br>'
+                `<div id="WallGodFetchProgressbar" class="progress-bar live-progress-bar progress-bar-alive" style="width:98%;margin:10px auto;"><div style="background: rgb(146, 194, 0);"></div><span class="label" style="margin-top:0px;"></span></div>`
               );
-              getData(optionGroup, optionMaxPages).then((data) => {
-                Dialog.close();
+              UI.InitProgressBars();
+              UI.updateProgressBar($('#WallGodFetchProgressbar'), 0, 1);
 
-                let plan = createPlanning(
-                  optionDistance,
-                  data
-                );
-                // FIX: remove the skipped-targets block too, not just the
-                // main plan table, otherwise re-running the planner stacks
-                // duplicate "skipped" tables underneath each other.
-                $('.wallGodContent, .wallGodSkipped').remove();
-                $('#am_widget_Farm')
-                  .first()
-                  // FIX: pass the whole plan (farms + skipped), not just
-                  // plan.farms, so buildTable can render both tables.
-                  .before(buildTable(plan));
-
-                bindEventHandlers();
-                UI.InitProgressBars();
+              getData(optionGroup, optionMaxPages, (current, total) => {
                 UI.updateProgressBar(
-                  $('#WallGodProgessbar'),
-                  0,
-                  plan.counter
+                  $('#WallGodFetchProgressbar'),
+                  current,
+                  total || 1
                 );
-                $('#WallGodProgessbar')
-                  .data('current', 0)
-                  .data('max', plan.counter);
-              });
+              })
+                .then((data) => {
+                  Dialog.close();
+
+                  let plan = createPlanning(
+                    optionDistance,
+                    data
+                  );
+                  // NEW: total walled villages found, independent of how
+                  // many could actually be matched to an origin - this is
+                  // the number to compare against Clear Barbarian Walls'
+                  // "N barbarian villages where found" so you can tell
+                  // whether the scan itself found everything, versus
+                  // targets simply having no available origin.
+                  plan.totalWalled = Object.keys(data.farms.farms).length;
+
+                  // FIX: remove the skipped-targets block too, not just the
+                  // main plan table, otherwise re-running the planner stacks
+                  // duplicate "skipped" tables underneath each other.
+                  $('.wallGodContent, .wallGodSkipped').remove();
+                  $('#am_widget_Farm')
+                    .first()
+                    // FIX: pass the whole plan (farms + skipped), not just
+                    // plan.farms, so buildTable can render both tables.
+                    .before(buildTable(plan));
+
+                  bindEventHandlers();
+                  UI.InitProgressBars();
+                  UI.updateProgressBar(
+                    $('#WallGodProgessbar'),
+                    0,
+                    plan.counter
+                  );
+                  $('#WallGodProgessbar')
+                    .data('current', 0)
+                    .data('max', plan.counter);
+                })
+                .catch((err) => {
+                  console.error('WallGod: failed to fetch data', err);
+                  Dialog.close();
+                  UI.ErrorMessage(t.messages.fetchError);
+                });
             });
 
           document.querySelector('.optionButton').focus();
@@ -684,7 +684,9 @@ window.WallGod.Main = (function (Library, Translation) {
   // "skipped" table beneath the normal plan. Both tables now also show
   // the reported wall level (new).
   const buildTable = function (plan) {
-    let html = `<div class="vis wallGodContent"><h4>WallGod - Clear Walls</h4><table class="vis" width="100%">
+    let html = `<div class="vis wallGodContent"><h4>WallGod - Clear Walls</h4>
+                <p style="margin:5px;font-size:11px;">${plan.totalWalled || 0} ${t.table.wallsFound} — ${plan.counter} ${t.table.planned}, ${plan.skipped.length} ${t.table.skippedShort}</p>
+                <table class="vis" width="100%">
                 <tr><div id="WallGodProgessbar" class="progress-bar live-progress-bar progress-bar-alive" style="width:98%;margin:5px auto;"><div style="background: rgb(146, 194, 0);"></div><span class="label" style="margin-top:0px;"></span></div></tr>
                 <tr><th style="text-align:center;">${t.table.origin}</th><th style="text-align:center;">${t.table.target}</th><th style="text-align:center;">${t.table.wall}</th><th style="text-align:center;">${t.table.fields}</th><th style="text-align:center;">${t.table.farm}</th></tr>`;
 
@@ -736,7 +738,7 @@ window.WallGod.Main = (function (Library, Translation) {
     return html;
   };
 
-  const getData = function (group, maxFaPages) {
+  const getData = function (group, maxFaPages, onFarmProgress) {
     let data = {
       villages: {},
       commands: {},
@@ -879,77 +881,89 @@ window.WallGod.Main = (function (Library, Translation) {
       return data;
     };
 
-    let farmProcessor = ($html) => {
-      if ($.isEmptyObject(data.farms.templates)) {
-        let unitSpeeds = lib.getUnitSpeeds();
+    // Parses the "B" (and other) farm templates out of the plain am_farm
+    // page's edit_all form. Only needs to run once - templates don't
+    // depend on the extended/paged farm list at all.
+    const parseTemplates = function ($html) {
+      if (!$.isEmptyObject(data.farms.templates)) return;
 
-        $html
-          .find('form[action*="action=edit_all"]')
-          .find('input[type="hidden"][name*="template"]')
-          .closest('tr')
-          .map((i, el) => {
-            let $el = $(el);
-            let $inputs = $el.find(
-              'input[type="text"], input[type="number"]'
-            );
-
-            let siege = {};
-            ['ram', 'catapult'].forEach((unit) => {
-              let input = $inputs.filter((index, element) => {
-                return (
-                  $(element).attr('name').trim().split('[')[0] == unit
-                );
-              });
-              siege[unit] =
-                input.length > 0
-                  ? input.first().val().toNumber() || 0
-                  : 0;
-            });
-
-            return (data.farms.templates[
-              $el
-                .prev('tr')
-                .find('a.farm_icon')
-                .first()
-                .attr('class')
-                .match(/farm_icon_(.*)\s/)[1]
-            ] = {
-              id: $el
-                .find(
-                  'input[type="hidden"][name*="template"][name*="[id]"]'
-                )
-                .first()
-                .val()
-                .toNumber(),
-              units: $inputs
-                .map((index, element) => {
-                  return $(element).val().toNumber();
-                })
-                .get(),
-              siege: siege,
-              speed: Math.max(
-                ...$inputs
-                  .map((index, element) => {
-                    return $(element).val().toNumber() > 0
-                      ? unitSpeeds[
-                      $(element)
-                        .attr('name')
-                        .trim()
-                        .split('[')[0]
-                      ]
-                      : 0;
-                  })
-                  .get()
-              ),
-            });
-          });
-      }
+      let unitSpeeds = lib.getUnitSpeeds();
 
       $html
-        .find('#plunder_list')
-        .find('tr[id^="village_"]')
+        .find('form[action*="action=edit_all"]')
+        .find('input[type="hidden"][name*="template"]')
+        .closest('tr')
         .map((i, el) => {
           let $el = $(el);
+          let $inputs = $el.find(
+            'input[type="text"], input[type="number"]'
+          );
+
+          let siege = {};
+          ['ram', 'catapult'].forEach((unit) => {
+            let input = $inputs.filter((index, element) => {
+              return (
+                $(element).attr('name').trim().split('[')[0] == unit
+              );
+            });
+            siege[unit] =
+              input.length > 0
+                ? input.first().val().toNumber() || 0
+                : 0;
+          });
+
+          return (data.farms.templates[
+            $el
+              .prev('tr')
+              .find('a.farm_icon')
+              .first()
+              .attr('class')
+              .match(/farm_icon_(.*)\s/)[1]
+          ] = {
+            id: $el
+              .find(
+                'input[type="hidden"][name*="template"][name*="[id]"]'
+              )
+              .first()
+              .val()
+              .toNumber(),
+            units: $inputs
+              .map((index, element) => {
+                return $(element).val().toNumber();
+              })
+              .get(),
+            siege: siege,
+            speed: Math.max(
+              ...$inputs
+                .map((index, element) => {
+                  return $(element).val().toNumber() > 0
+                    ? unitSpeeds[
+                    $(element)
+                      .attr('name')
+                      .trim()
+                      .split('[')[0]
+                    ]
+                    : 0;
+                })
+                .get()
+            ),
+          });
+        });
+    };
+
+    // Parses a chunk of <tr> rows - whether from a full page or from an
+    // ajax=page_entries fragment - into data.farms.farms, keyed by target
+    // coord.
+    const parseFarmRows = function ($rows) {
+      $rows
+        .filter('tr[id^="village_"]')
+        .map((i, el) => {
+          let $el = $(el);
+          let dotSrc =
+            $el.find('img[src*="graphic/dots/"]').attr('src') || '';
+          let colorMatch = dotSrc.match(
+            /dots\/(red_blue|green|yellow|red|blue)/
+          );
 
           return (data.farms.farms[
             $el
@@ -963,22 +977,100 @@ window.WallGod.Main = (function (Library, Translation) {
             // alternation matches the first alternative that fits, and
             // "red" is itself a valid prefix match of "red_blue", so a
             // combined report was previously always mislabeled as "red".
-            color: $el
-              .find('img[src*="graphic/dots/"]')
-              .attr('src')
-              .match(/dots\/(red_blue|green|yellow|red|blue)/)[1],
+            color: colorMatch ? colorMatch[1] : null,
             max_loot: $el.find('img[src*="max_loot/1"]').length > 0,
-            // NEW: the reported wall level, straight from the "extended"
-            // Farm Assistant view (see getData - the request URL passes
-            // extended=1). This is the same column Clear Barbarian Walls
-            // reads to size its attacks; here it's only used to decide
-            // whether a target still needs clearing, not to size troops.
-            // "?" means the wall has never been scouted.
+            // The reported wall level, from the "extended" Farm Assistant
+            // view. This is the same column Clear Barbarian Walls reads to
+            // size its attacks; here it's only used to decide whether a
+            // target still needs clearing, not to size troops. "?" means
+            // the wall has never been scouted.
             wall: $el.find('td').eq(6).text().trim(),
           });
         });
+    };
 
-      return data;
+    // FIX: the real bug behind the missing/inconsistent target counts. A
+    // plain full-page `Farm_page=N` request with `extended=1` bolted on as
+    // a query string parameter does NOT reliably return the wall-level
+    // column - that column is only served through the dedicated
+    // `page_entries` ajax action (the same one the game's own "extended
+    // view" toggle uses, and the same one Clear Barbarian Walls calls). So
+    // the "wall" cell being read was effectively noise, which explains
+    // both the undercount and the run-to-run inconsistency.
+    //
+    // Step 1: fetch the plain am_farm page once. This gives the edit_all
+    // template form (unaffected by extended/paging) AND the page count
+    // from #plunder_list_nav - the number of *pages* is the same whether
+    // or not extended view is used, since extended only adds columns, not
+    // rows.
+    const fetchFarmListPageUrls = function () {
+      return lib
+        .get(game_data.link_base_pure + 'am_farm')
+        .then((response) => {
+          let $plain = $(jQuery.parseHTML(response));
+
+          parseTemplates($plain);
+
+          let $navItems = $plain
+            .find('#plunder_list_nav')
+            .first()
+            .find('a.paged-nav-item, strong.paged-nav-item');
+          let lastPageIndex =
+            $navItems.length > 0
+              ? parseInt(
+                $navItems[$navItems.length - 1].textContent.replace(
+                  /\D/g,
+                  ''
+                )
+              ) - 1
+              : 0;
+          let cap =
+            maxFaPages > 0
+              ? Math.min(maxFaPages - 1, lastPageIndex)
+              : lastPageIndex;
+
+          let urls = [];
+          for (let p = 0; p <= cap; p++) {
+            urls.push(
+              TribalWars.buildURL('GET', 'am_farm', {
+                ajax: 'page_entries',
+                Farm_page: p,
+                class: '',
+                extended: 1,
+                order: 'distance',
+                dir: 'asc',
+              })
+            );
+          }
+
+          return urls;
+        });
+    };
+
+    // Step 2: fetch every page_entries URL (nearest-first, capped at
+    // maxFaPages) and parse the wall-annotated rows out of each. Goes
+    // through lib.get so requests use the same queued/retried ajax
+    // infrastructure as the rest of the script. Reports progress as each
+    // request completes so the options dialog can show a real x/total bar.
+    const fetchAllFarmListPages = function () {
+      return fetchFarmListPageUrls().then((urls) => {
+        let done = 0;
+        let total = urls.length;
+
+        if (onFarmProgress) onFarmProgress(0, total);
+
+        return Promise.all(
+          urls.map((url) =>
+            lib.get(url).then((response) => {
+              parseFarmRows(
+                $(jQuery.parseHTML(response.plunder_list || ''))
+              );
+              done++;
+              if (onFarmProgress) onFarmProgress(done, total);
+            })
+          )
+        );
+      });
     };
 
     // Borrowed from Clear Barbarian Walls: keep a target only if it still
@@ -1022,20 +1114,7 @@ window.WallGod.Main = (function (Library, Translation) {
         }),
         commandsProcessor
       ),
-      // NEW: extended=1 pulls in the wall-level column (same flag Clear
-      // Barbarian Walls uses); order=distance&dir=asc sorts nearest-first
-      // so a page cap drops the farthest targets, not random ones;
-      // processAllPagesLimited stops after maxFaPages pages (0/blank =
-      // unlimited, same as the old behaviour).
-      lib.processAllPagesLimited(
-        TribalWars.buildURL('GET', 'am_farm', {
-          extended: 1,
-          order: 'distance',
-          dir: 'asc',
-        }),
-        farmProcessor,
-        maxFaPages
-      ),
+      fetchAllFarmListPages(),
     ])
       .then(filterFarms)
       .then(() => {
