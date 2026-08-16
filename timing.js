@@ -147,6 +147,13 @@ var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? a
         Timing.tickHandlers.timers.init();
     }
 
+    /* The app's WebView datetime picker has no seconds field, so the snipe
+     * time has to be typed as text there. */
+    function isMobileSkin() {
+        return (typeof game_data !== 'undefined' && game_data.device === 'mobile')
+            || document.getElementById('mobileHeader') !== null;
+    }
+
     function msToDatetimeLocal(ms) {
         goalDate = new Date(ms);
         string = (goalDate.getFullYear() + "-" +
@@ -333,7 +340,16 @@ var autoSendSafetyMarginMs = (typeof autoSendSafetyMarginMs !== 'undefined') ? a
             var msGoalInput = document.createElement("msgoal");
             var rememberInput = document.createElement("remember")
             progressBar.innerHTML = ("<div id='progress_bar'><div id='time'></div><div id='bar'></div></div>");
-            timeGoalInput.innerHTML = ("<div width='100%'>snipe time: <input type='datetime-local' max=\"9999-12-31T23:59:59\" id='timegoal' step='1'></div>");
+            /* The mobile app renders <input type="datetime-local"> as an
+             * Android picker offering only month/day/year and hour/minute --
+             * step='1' is ignored there, so a snipe second cannot be entered
+             * at all. Use a plain text field on mobile: it takes the same
+             * "YYYY-MM-DDTHH:MM:SS" string msToDatetimeLocal() already emits
+             * and new Date() already parses. Desktop keeps the picker, where
+             * seconds do work. */
+            timeGoalInput.innerHTML = isMobileSkin()
+                ? ("<div width='100%'>snipe time: <input type='text' id='timegoal' placeholder='YYYY-MM-DDTHH:MM:SS' style='width: 200px;' autocapitalize='off' autocomplete='off' spellcheck='false'></div>")
+                : ("<div width='100%'>snipe time: <input type='datetime-local' max=\"9999-12-31T23:59:59\" id='timegoal' step='1'></div>");
             msGoalInput.innerHTML = ("<div width='100%'>snipe ms: <input type='number' id='msgoal' style='width: 100px;'/></div>");
             rememberInput.innerHTML = ("<div width='100%'><label>remember: <input type='checkbox' id='remember'/></label> &nbsp;<label style='color:red'>auto-send: <input type='checkbox' id='autoSend'/></label></div>");
 
